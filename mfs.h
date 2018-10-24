@@ -90,16 +90,16 @@ int pathtoinode(const char *path){ char *a,*b,*c;int i,fl;
 //still needs some revision
     if(strcmp("/",path)==0)return 0;path=strdup(path);
     a=strtok((char*)path,"/");fl=0;
-    while(a!=NULL){printf("searching for %s\n",a);printf("p:%p\n",&fs->ind[fl].type);
-        if(fs->ind[fl].type!=1){free((void*)path);printf("not directory\n");return -1;}
-        c=inode_dat(fl);printf("path list of fl:%s\n",c);
+    while(a!=NULL){
+        if(fs->ind[fl].type!=1){free((void*)path);return -1;}
+        b=c=inode_dat(fl);
         while(1){
         for(i=0;a[i]!='\0';i++)if(a[i]!=c[i])break;
-        if(a[i]=='\0'&&c[i]==' '){sscanf(c+i,"%d",&fl);a=strtok(NULL,"/");break;}
-        while((c[i]!='\0')&&c[i]!=',')i++;
-        if(c[i]=='\0'){free((void*)path);free((void*)c);return -1;}
-        free((void*)c);
-        }
+        if(a[i]=='\0'&&c[i]==' '){sscanf(c+i+1,"%d",&fl);a=strtok(NULL,"/");break;}
+        while((c[i]!='\0')&&(c[i]!=','))i++;
+        if(c[i]=='\0'){free((void*)path);printf("nf ");free((void*)b);return -1;}
+        else i++;c+=i;    
+        }free((void*)b);
     }
     free((void*)path);
     return fl;
@@ -149,9 +149,9 @@ static void init_fs(){
 static void destroy_fs(void *pd){//cont=fopen("cont2.txt","wb");
     int fz=4*1024*1024;fwrite((void*)fs,1,fz,cont);fclose(cont);
     //fwrite((void*)"abcdefghijklsb",1,10,logger);
-    fwrite((void*)lbuffer,1,loffset-lbuffer,logger);
+    //fwrite((void*)lbuffer,1,loffset-lbuffer,logger);
     fclose(logger);
-    free((void*)fs);free((void*)lbuffer);
+    //free((void*)fs);free((void*)lbuffer);
 }
 
 static int getattr_fs(const char *path,struct stat *st,struct fuse_file_info *fi){

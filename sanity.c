@@ -29,7 +29,8 @@ int main(){int r;char mybuf[4096];struct stat st;
 //read root done
     r=getattr_fs("/abc",&st,NULL);
     printf("getattr of /abc done. return value:%d mode:%d nlink:%ld\n",r,st.st_mode,st.st_nlink);
-    printf("inode of path .:%d\n",pathtoinode("/."));
-    free((void*)fs);
+    printf("inode of path ..:%d\n",pathtoinode("/.."));
+    destroy_fs(NULL);
+    free((void*)fs);//fclose(cont);fclose(logger);
     return 0;
 }
