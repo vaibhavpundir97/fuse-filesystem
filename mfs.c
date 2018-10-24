@@ -23,10 +23,10 @@ static void destroy_fs(void *private_data);
 
 static struct fuse_operations fop={
     .init=NULL,
-    .getattr=NULL,
-    .readdir=NULL,
-    .open=NULL,
-    .read=NULL,
+    .getattr=getattr_fs,
+    .readdir=readdir_fs,
+    .open=open_fs,
+    .read=read_fs,
     .destroy=destroy_fs,
 };
 

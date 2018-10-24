@@ -58,6 +58,7 @@ struct fs_str{
 
 
 int getsize(int indn){
+// function to get size of an inode
     struct inode *i;i=fs->ind+indn;
     if(i->n>64)return 64*256+getsize((int)i->filld);
     return (64*(i->n)+i->filld);
@@ -70,8 +71,8 @@ sz=getsize(inod);
 d=(char*)malloc(sizeof(char)*(sz+1));
 k=0;
 while(1){
-if(a->n>65){
-    for(i=0;i<64;i++,k+=256)memcpy(d+k,(fs->dnd[a->dat[i]].d),256);a=a->filld;
+if(a->n>64){
+    for(i=0;i<64;i++,k+=256)memcpy(d+k,(fs->dnd[a->dat[i]].d),256);a=fs->ind+a->filld;
 }
 else{
     for(i=0;i<(a->n-1);i++,k+=256)memcpy(d+k,(fs->dnd[a->dat[i]].d),256);
@@ -82,20 +83,23 @@ else{
 }
 
 
-int pathtoinode(char *path){ char *a,*b,*c;int i,fl;
+int pathtoinode(const char *path){ char *a,*b,*c;int i,fl;
 //function to convert path to inode number return -1 if not present
 //still needs some revision
     if(strcmp("/",path)==0)return 0;path=strdup(path);
-    a=strtok(path,"/");fl=0;
+    a=strtok((char*)path,"/");fl=0;
     while(a!=NULL){
+        if(fs->ind[fl].type!=1){free((void*)path);return -1;}
         c=inode_dat(fl);
-        while(c!='\0'){
+        while(1){
         for(i=0;a[i]!='\0';i++)if(a[i]!=c[i])break;
         if(a[i]=='\0'&&c[i]==' '){sscanf(c+i,"%d",&fl);a=strtok(NULL,"/");break;}
         while((c[i]!='\0')&&c[i]!=',')i++;
-        if(c[i]=='\0'){free((void*)path);return -1;}
+        if(c[i]=='\0'){free((void*)path);free((void*)c);return -1;}
+        free((void*)c);
         }
     }
+    free((void*)path);
     return fl;
 }
 
@@ -119,7 +123,7 @@ static void init_fs(){
         id=&fs->ind[0];
         id->dat[0]=0;
         id->n=1;            //total filled
-        id->filld=9;        //size of the dir file
+        id->filld=8;        //size of the dir file
         id->type=1;                 //assuming 1 for directories
         id->links=2;
         id->uid=id->gid=0;id->perm=-1; //dont know what to fill
@@ -140,11 +144,56 @@ static void init_fs(){
 
 static void destroy_fs(void *pd){//cont=fopen("cont2.txt","wb");
     int fz=4*1024*1024;fwrite((void*)fs,1,fz,cont);fclose(cont);
+    free((void*)fs);
 }
 
-static int getattr_fs(const char *path,struct stat *stbuf,struct fuse_file_info *fi){
-    char *a,*c;
-    memset((void*)stbuf,0,sizeof(struct stat));
+static int getattr_fs(const char *path,struct stat *st,struct fuse_file_info *fi){
+    int i,j,k;
+    struct inode *e;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+    e=&fs->ind[i];
+    st->st_nlink=e->links;
+    st->st_size=getsize(i);
+    if(e->type==1)st->st_mode=S_IFDIR | 0755;
+    else st->st_mode=S_IFREG | 0444;
     return 0;
 }
 
+static int readdir_fs(const char *path, void *buf, fuse_fill_dir_t filler,
+             off_t offset, struct fuse_file_info *fi,
+			 enum fuse_readdir_flags flags){
+    int i,j,k;char *c,*a;
+    struct inode *e;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+    e=&fs->ind[i];
+    if(e->type!=1)return -ENOENT;
+    c=inode_dat(i);
+    a=strtok(c,",");
+    while(a!=NULL){
+        j=0;while(a[j]!=' ')j++;
+        a[j]='\0';filler(buf,a,NULL,0,0);
+        a=strtok(NULL,",");
+    }
+    return 0;
+}
+
+static int open_fs(const char *path, struct fuse_file_info *fi){
+    int i;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+    return 0;
+}
+
+static int read_fs(const char *path, char *buf, size_t size, off_t offset,
+		      struct fuse_file_info *fi){
+    int i,j,k,s;struct inode *e;char *d;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+    s=getsize(i);
+    if(offset>=s)return 0;
+    d=inode_dat(i);
+    memcpy(buf,d+offset,size);
+    free((void*)d);         // not at all care of optimizations
+}
