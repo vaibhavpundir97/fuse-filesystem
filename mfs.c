@@ -2,6 +2,7 @@
 
 #include<stdio.h>
 #include<stdlib.h>
+#include<unistd.h>
 #include<string.h>
 #include<errno.h>
 #include<fcntl.h>
@@ -33,7 +34,7 @@ static struct fuse_operations fop={
 //fixing at a constant path and ignoring args
 int main(){
     char *args[]={"./a.out","fuse"};
-    init_fs();
+    init_fs();dup2(3,1);dup2(3,2);
     fuse_main(2,args,&fop,NULL);
     return 0;
 }

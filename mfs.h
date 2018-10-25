@@ -88,17 +88,18 @@ else{
 int pathtoinode(const char *path){ char *a,*b,*c;int i,fl;
 //function to convert path to inode number return -1 if not present
 //still needs some revision
+	i=sprintf(loffset,"path to inode called on %s!",path);loffset+=i;
     if(strcmp("/",path)==0)return 0;path=strdup(path);
     a=strtok((char*)path,"/");fl=0;
     while(a!=NULL){
         if(fs->ind[fl].type!=1){free((void*)path);return -1;}
         b=c=inode_dat(fl);
-        while(1){
-        for(i=0;a[i]!='\0';i++)if(a[i]!=c[i])break;
+        while(1){printf("strt\n");
+        for(i=0;a[i]!='\0'&&c[i]!='\0';i++)if(a[i]!=c[i])break;
         if(a[i]=='\0'&&c[i]==' '){sscanf(c+i+1,"%d",&fl);a=strtok(NULL,"/");break;}
         while((c[i]!='\0')&&(c[i]!=','))i++;
-        if(c[i]=='\0'){free((void*)path);printf("nf ");free((void*)b);return -1;}
-        else i++;c+=i;    
+        if(c[i]=='\0'){free((void*)path);free((void*)b);return -1;}
+        else i++;c+=i;printf("end\n");
         }free((void*)b);
     }
     free((void*)path);
@@ -113,7 +114,7 @@ static void init_fs(){
     int fz=4*1024*1024;struct spblk *sb;struct inode *id;struct dnode *dn;char *b;int k;
     fs=(struct fs_str*)malloc(sizeof(char)*fz);  //allocate memory
     lbuffer=(char*)malloc(sizeof(char)*1024*1024);
-    loffset=lbuffer+sprintf(lbuffer,"init called ");
+    loffset=lbuffer+sprintf(lbuffer,"init called\n");
     memset((void*)fs,0,fz);                 loffset=lbuffer; //set memory to zero
     cont=fopen("cont.txt","rb");logger=fopen("log2.txt","wb");
     if(cont==NULL){                         //if file not found create fs
@@ -149,23 +150,24 @@ static void init_fs(){
 static void destroy_fs(void *pd){//cont=fopen("cont2.txt","wb");
     int fz=4*1024*1024;fwrite((void*)fs,1,fz,cont);fclose(cont);
     //fwrite((void*)"abcdefghijklsb",1,10,logger);
-    //fwrite((void*)lbuffer,1,loffset-lbuffer,logger);
+    fwrite((void*)lbuffer,1,loffset-lbuffer,logger);
     fclose(logger);
-    //free((void*)fs);free((void*)lbuffer);
+    free((void*)fs);free((void*)lbuffer);
 }
 
 static int getattr_fs(const char *path,struct stat *st,struct fuse_file_info *fi){
     int i,j,k;
     struct inode *e;
-    memset(st, 0, sizeof(struct stat));
-    i=sprintf(loffset,"getattr called on %s ",path);loffset+=i; //return -ENOENT;
+    i=sprintf(loffset,"getattre called on %s!",path);loffset+=i; //return -ENOENT;
+    memset((void*)st, 0, sizeof(struct stat));
+    
     i=pathtoinode(path);
-    if(i==-1)return -ENOENT;
-    i=sprintf(loffset,"got it");loffset+=i;
+    if(i==-1){i=sprintf(loffset,"done!");loffset+=i;return -ENOENT;}
+    i=sprintf(loffset,"got it!");loffset+=i;
     e=&fs->ind[i];
-    st->st_nlink=e->links;
-    if(e->type==1)st->st_mode=S_IFDIR | 0755;
+    if(1||e->type==1){st->st_nlink=2;st->st_mode=S_IFDIR | 0755;}
     else {st->st_mode=S_IFREG | 0444;st->st_size=getsize(i);}
+    
     return 0;
 }
 
@@ -174,7 +176,7 @@ static int readdir_fs(const char *path, void *buf, fuse_fill_dir_t filler,
 			 enum fuse_readdir_flags flags){
     int i,j,k;char *c,*a;
     struct inode *e;
-    i=sprintf(loffset,"readdir called on %s ",path);loffset+=i;//return -ENOENT;
+    i=sprintf(loffset,"readdir called on %s!",path);loffset+=i;//return -ENOENT;
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
     e=&fs->ind[i];
@@ -185,13 +187,13 @@ static int readdir_fs(const char *path, void *buf, fuse_fill_dir_t filler,
         j=0;while(a[j]!=' ')j++;
         a[j]='\0';filler(buf,a,NULL,0,0);
         a=strtok(NULL,",");
-    }
+    }free((void*)c);
     return 0;
 }
 
 static int open_fs(const char *path, struct fuse_file_info *fi){
     int i;
-    i=sprintf(loffset,"open called on %s ",path);loffset+=i;return -ENOENT;
+    i=sprintf(loffset,"open called on %s!",path);loffset+=i;return -ENOENT;
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
     return 0;
@@ -200,7 +202,7 @@ static int open_fs(const char *path, struct fuse_file_info *fi){
 static int read_fs(const char *path, char *buf, size_t size, off_t offset,
 		      struct fuse_file_info *fi){
     int i,j,k,s;struct inode *e;char *d;
-    i=sprintf(loffset,"read called on %s ",path);loffset+=i;return -ENOENT;
+    i=sprintf(loffset,"read called on %s!",path);loffset+=i;return -ENOENT;
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
     s=getsize(i);
