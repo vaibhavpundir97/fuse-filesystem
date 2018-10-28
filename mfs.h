@@ -109,7 +109,7 @@ int pathtoinode(const char *path){ char *a,*b,*c;int i,fl;
 }
 
 void rmbit(int a,int t){
-    char *b;
+    char *b;printf("rm:%d t:%d\n",a,t);
     if(t==0){
         b=fs->dbit;b[a/8]&=~(1<<(a%8));
         return;
@@ -118,6 +118,41 @@ void rmbit(int a,int t){
         b=fs->ibit+2;b[a/8]&=~(1<<(a%8));
         return;
     }
+}
+
+int getfree(int t){
+    char *b;int i,j;
+    if(t==0){
+        b=fs->dbit;for(i=0;i<1792;i++)if(b[i]!=-1)break;
+        if(i==1792)return -1;
+        for(j=0;j<8;j++)if(b[i]&(1<<j))break;b[i]|=(1<<j);return i*8+7;
+    }
+    if(t==1){
+        b=fs->ibit+2;for(i=2;i<256;i++)if(b[i]!=-1)break;
+        if(i==1792)return -1;
+        for(j=0;j<8;j++)if(b[i]&(1<<j))break;b[i]|=(1<<j);return i*8+7;
+    }
+}
+
+void deldat(int ino){
+    struct inode *e;int i;
+    e=&fs->ind[ino];printf("a:%d n:%d\n",ino,e->n);
+    if(e->n>64){deldat(e->filld);e->n=64;rmbit(e->filld,1);}
+    for(i=0;i<e->n;i++)rmbit(e->dat[i],0);
+    e->n=0;
+}
+
+void inode_write(int ino,char *d,int sz){
+    struct inode *e,*f;int i,j,k;char *a;
+    //deldat(ino);
+    e=fs->ind+ino;e->n=0;
+    if(sz>(64*256)){e->filld=getfree(1);e->n=65;
+    f=fs->ind+e->filld;f->links=1;f->parent=-1;f->filld=0;f->n=0;
+    inode_write(e->filld,d+256*64,sz-256*64);sz=256*64;
+    }
+    j=sz/256;k=sz%256;printf("wr:%d %d %d\n",j,k,sz);
+    for(i=0;i<j;i++){e->dat[i]=getfree(0);memcpy((void*)fs->dnd[e->dat[i]].d,d+256*i,256);}
+    e->dat[j]=getfree(0);memcpy(fs->dnd[e->dat[j]].d,d+256*j,k);if(e->n==0){e->n=j+1;e->filld=k;}
 }
 
 // init function -----------------------------------------
@@ -234,23 +269,40 @@ static int read_fs(const char *path, char *buf, size_t size, off_t offset,
     free((void*)d);         // not at all care of optimizations
     return size;
 }
-/*
+
 static int write_fs(const char *path,const char *dat,size_t size,off_t offset,
                 struct fuse_file_info *fi){
     int i,j,k,s;struct inode *e;char *d;
     i=sprintf(loffset,"read called on %s size:%ld offset %ld\n",path,size,offset);loffset+=i;
     i=pathtoinode(path);
+    printf("init done\n");
     if(i==-1)return -ENOENT;
+    j=getsize(i);
+    d=inode_dat(i);
+    if((offset+size)>j)d=(char*)realloc((void*)d,sizeof(char)*(j=(offset+size)));
+    for(k=0;k<size;k++)d[k+offset]=dat[k];
+    printf("funcdone %d,%d\n",i,fs->ind[i].n);
+    deldat(i);
+    printf("deldone\n");
+    inode_write(i,d,j);
+    free((void*)d);
+    return size;
 }
 
-/*static int mkdir_fs(const char *path, mode_t what){
-    int i;struct inode *e;
-    i=sprintf(loffset,"mkdir called on %s!",path);loffset+=i;return -ENOENT;
-    i=pathtoinode(path);
-    if(i==-1)return -ENOENT;
+static int mkdir_fs(const char *path, mode_t what){
+    int i,j,k,x,sz;struct inode *e;char *a,*d;
+    i=sprintf(loffset,"mkdir called on %s\n",path);loffset+=i;
+    i=pathtoinode(path);if(i!=-1)return -ENOENT;
+    a=strdup(path);j=k=1;while(a[j]!='\0'){if(a[j]=='/')k=j;j++;}
+    if(a[k]!='/')i=pathtoinode("/");else{a[k]='\0';k++;i=pathtoinode(a);}
+    if(i==-1){free((void*)a);return -ENOENT;}
+    sz=getsize(i);//printf("nf:%s\n",a);
+    d=inode_dat(i);d=realloc(d,sz+strlen(a+k)+32);x=getfree(1);
+    e=fs->ind+x;e->type=1;e->n=0;e->filld=0;e->links=2;e->parent=i;
+    j=sprintf(d+sz,",%s %d",a+k,x);printf("d:%s x:%d sz:%d j:%d i:%d\n",d,x,sz,j,i);deldat(i);inode_write(i,d,sz+j);free((void*)a);
 }
 
-static int unlink_fs(const char *path){
+/*static int unlink_fs(const char *path){
     int i,p,k;struct inode *e;char *a,*b;
     i=sprintf(loffset,"unlink called on %s!",path);loffset+=i;
     return -ENOENT;

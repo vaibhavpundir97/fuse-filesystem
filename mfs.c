@@ -29,7 +29,8 @@ static struct fuse_operations fop={
     .open=open_fs,
     .read=read_fs,
     .destroy=destroy_fs,
-    //.mkdir=mkdir_fs,
+    .write=write_fs,
+    .mkdir=mkdir_fs,
     //.unlink=unlink_fs,
 };
 
