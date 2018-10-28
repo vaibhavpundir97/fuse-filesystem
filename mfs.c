@@ -29,6 +29,8 @@ static struct fuse_operations fop={
     .open=open_fs,
     .read=read_fs,
     .destroy=destroy_fs,
+    //.mkdir=mkdir_fs,
+    //.unlink=unlink_fs,
 };
 
 //fixing at a constant path and ignoring args

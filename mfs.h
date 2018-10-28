@@ -39,8 +39,9 @@ struct inode{
     int gid;
     int perm;
     int type;
+    short int parent;
     //we will fill other fields later
-    char none[104];
+    char none[102];
 };
 
 struct dnode{
@@ -63,7 +64,7 @@ int getsize(int indn){
 // function to get size of an inode
     struct inode *i;i=fs->ind+indn;
     if(i->n>64)return 64*256+getsize((int)i->filld);
-    return (64*(i->n)+i->filld);
+    return (64*(i->n-1)+i->filld);
 }
 
 char *inode_dat(int inod){
@@ -85,29 +86,54 @@ else{
 }
 
 
+
 int pathtoinode(const char *path){ char *a,*b,*c;int i,fl;
 //function to convert path to inode number return -1 if not present
 //still needs some revision
-	i=sprintf(loffset,"path to inode called on %s!",path);loffset+=i;
+	//i=sprintf(loffset,"path to inode called on %s\n",path);loffset+=i;
     if(strcmp("/",path)==0)return 0;path=strdup(path);
     a=strtok((char*)path,"/");fl=0;
     while(a!=NULL){
         if(fs->ind[fl].type!=1){free((void*)path);return -1;}
         b=c=inode_dat(fl);
-        while(1){printf("strt\n");
+        while(1){
         for(i=0;a[i]!='\0'&&c[i]!='\0';i++)if(a[i]!=c[i])break;
         if(a[i]=='\0'&&c[i]==' '){sscanf(c+i+1,"%d",&fl);a=strtok(NULL,"/");break;}
         while((c[i]!='\0')&&(c[i]!=','))i++;
         if(c[i]=='\0'){free((void*)path);free((void*)b);return -1;}
-        else i++;c+=i;printf("end\n");
+        else i++;c+=i;
         }free((void*)b);
     }
     free((void*)path);
     return fl;
 }
 
+void rmbit(int a,int t){
+    char *b;
+    if(t==0){
+        b=fs->dbit;b[a/8]&=~(1<<(a%8));
+        return;
+    }
+    if(t==1){
+        b=fs->ibit+2;b[a/8]&=~(1<<(a%8));
+        return;
+    }
+}
 
 // init function -----------------------------------------
+
+static void addextra(){
+    struct inode *id;struct dnode *dn;
+    id=fs->ind+0;dn=fs->dnd+0;strcpy(dn->d,". 0,.. 0,a.txt 1,b 2");id->filld=20;
+    id=fs->ind+1;dn=fs->dnd+1;strcpy(dn->d,"my first data");id->filld=13;id->parent=0;
+    id->n=1;id->dat[0]=1;id->links=1;id->uid=id->gid=0;id->perm=-1;id->type=0;
+    id=fs->ind+2;dn=fs->dnd+2;strcpy(dn->d,". 2,.. 2,a2.txt 3");id->filld=17;id->parent=0;
+    id->n=1;id->dat[0]=2;id->links=2;id->uid=id->gid=0;id->perm=-1;id->type=1;
+    id=fs->ind+3;dn=fs->dnd+3;strcpy(dn->d,"second data");id->filld=11;id->parent=2;
+    id->n=1;id->dat[0]=3;id->links=1;id->uid=id->gid=0;id->perm=-1;id->type=0;
+    fs->dbit[0]=15;fs->ibit[2]=15;
+}
+
 
 static void init_fs(){
     //to initially init filesystem
@@ -117,39 +143,36 @@ static void init_fs(){
     loffset=lbuffer+sprintf(lbuffer,"init called\n");
     memset((void*)fs,0,fz);                 loffset=lbuffer; //set memory to zero
     cont=fopen("cont.txt","rb");logger=fopen("log2.txt","wb");
-    if(cont==NULL){                         //if file not found create fs
+    if(1||cont==NULL){                         //if file not found create fs
         sb=&fs->sb;
         cont=fopen("cont.txt","wb");
         strcpy(sb->name,"myfs");strcpy(sb->format,"myformat");
         sb->inodefilled=sb->dnodefilled=1;
         sb->inodetotal=2032;sb->dnodetotal=14336;
-        b=fs->ibit;b[0]=b[1]=-1;b[2]=1<<7;   //set to filled as first two blocks are filled
-        b=fs->dbit;b[0]=1<<7;        //only one datanode (root directory) is filled
+        b=fs->ibit;b[0]=b[1]=-1;b[2]=1;   //set to filled as first two blocks are filled
+        b=fs->dbit;b[0]=1;        //only one datanode (root directory) is filled
         id=&fs->ind[0];
         id->dat[0]=0;
-        id->n=1;            //total filled
+        id->n=1;id->parent=-1;           //total filled
         id->filld=8;        //size of the dir file
         id->type=1;                 //assuming 1 for directories
         id->links=2;
         id->uid=id->gid=0;id->perm=-1; //dont know what to fill
-        dn=&fs->dnd[0];printf("pi:%p\n",&id->type);
+        dn=&fs->dnd[0];
         strcpy(dn->d,". 0,.. 0");
-        //fwrite((void*)fs,1,fz,cont);//fclose(cont);
-        //fflush(cont);
-        fseek(cont,0,SEEK_SET);
+        addextra();
     }
     else {              //if file already present then read previous contents
-        fread((void*)fs,1,fz,cont);fclose(cont);cont=fopen("cont.txt","wb");//fseek(cont,0,SEEK_SET);
-    }//return NULL;
+        fread((void*)fs,1,fz,cont);fclose(cont);//cont=fopen("cont.txt","wb");//fseek(cont,0,SEEK_SET);
+    }
 }
 
 
 //main functions section-------------------------------------------------------------
 
 
-static void destroy_fs(void *pd){//cont=fopen("cont2.txt","wb");
+static void destroy_fs(void *pd){
     int fz=4*1024*1024;fwrite((void*)fs,1,fz,cont);fclose(cont);
-    //fwrite((void*)"abcdefghijklsb",1,10,logger);
     fwrite((void*)lbuffer,1,loffset-lbuffer,logger);
     fclose(logger);
     free((void*)fs);free((void*)lbuffer);
@@ -158,14 +181,12 @@ static void destroy_fs(void *pd){//cont=fopen("cont2.txt","wb");
 static int getattr_fs(const char *path,struct stat *st,struct fuse_file_info *fi){
     int i,j,k;
     struct inode *e;
-    i=sprintf(loffset,"getattre called on %s!",path);loffset+=i; //return -ENOENT;
+    i=sprintf(loffset,"getattr called on %s\n",path);loffset+=i;
     memset((void*)st, 0, sizeof(struct stat));
-    
     i=pathtoinode(path);
-    if(i==-1){i=sprintf(loffset,"done!");loffset+=i;return -ENOENT;}
-    i=sprintf(loffset,"got it!");loffset+=i;
+    if(i==-1)return -ENOENT;
     e=&fs->ind[i];
-    if(1||e->type==1){st->st_nlink=2;st->st_mode=S_IFDIR | 0755;}
+    if(e->type==1){st->st_nlink=2;st->st_mode=S_IFDIR | 0755;}
     else {st->st_mode=S_IFREG | 0444;st->st_size=getsize(i);}
     
     return 0;
@@ -176,7 +197,7 @@ static int readdir_fs(const char *path, void *buf, fuse_fill_dir_t filler,
 			 enum fuse_readdir_flags flags){
     int i,j,k;char *c,*a;
     struct inode *e;
-    i=sprintf(loffset,"readdir called on %s!",path);loffset+=i;//return -ENOENT;
+    i=sprintf(loffset,"readdir called on %s\n",path);loffset+=i;
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
     e=&fs->ind[i];
@@ -193,7 +214,7 @@ static int readdir_fs(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int open_fs(const char *path, struct fuse_file_info *fi){
     int i;
-    i=sprintf(loffset,"open called on %s!",path);loffset+=i;return -ENOENT;
+    i=sprintf(loffset,"open called on %s\n",path);loffset+=i;//return -ENOENT;
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
     return 0;
@@ -202,12 +223,45 @@ static int open_fs(const char *path, struct fuse_file_info *fi){
 static int read_fs(const char *path, char *buf, size_t size, off_t offset,
 		      struct fuse_file_info *fi){
     int i,j,k,s;struct inode *e;char *d;
-    i=sprintf(loffset,"read called on %s!",path);loffset+=i;return -ENOENT;
+    i=sprintf(loffset,"read called on %s size:%ld offset %ld\n",path,size,offset);loffset+=i;//return -ENOENT;
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
     s=getsize(i);
     if(offset>=s)return 0;
     d=inode_dat(i);
+    if(size>s)size=s;
     memcpy(buf,d+offset,size);
     free((void*)d);         // not at all care of optimizations
+    return size;
 }
+/*
+static int write_fs(const char *path,const char *dat,size_t size,off_t offset,
+                struct fuse_file_info *fi){
+    int i,j,k,s;struct inode *e;char *d;
+    i=sprintf(loffset,"read called on %s size:%ld offset %ld\n",path,size,offset);loffset+=i;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+}
+
+/*static int mkdir_fs(const char *path, mode_t what){
+    int i;struct inode *e;
+    i=sprintf(loffset,"mkdir called on %s!",path);loffset+=i;return -ENOENT;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+}
+
+static int unlink_fs(const char *path){
+    int i,p,k;struct inode *e;char *a,*b;
+    i=sprintf(loffset,"unlink called on %s!",path);loffset+=i;
+    return -ENOENT;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+    e=fs->ind+i;p=e->parent;
+    if(e->type==1)return -ENOENT;
+    a=inode_dat(p);b=strtok(a,",");
+    while(b!=NULL){
+        while((*b++)!=' ');sscanf(b,"%d",&k);
+        if(k==i)
+    }
+}*/
+

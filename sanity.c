@@ -14,12 +14,12 @@ int kfill (void *buf, const char *name,
 				enum fuse_fill_dir_flags flags){
                     printf("bufferfill:%s\n",name);
                 }
-int main(){int r;char mybuf[4096];struct stat st;
+int main(){int r;char mybuf[4096],*a;struct stat st;
     init_fs();
     printf("init done\n");
     r=getattr_fs("/",&st,NULL);
     printf("getattr of / done. return value:%d mode:%d nlink:%ld\n",r,st.st_mode,st.st_nlink);
-    r=readdir_fs("/",mybuf,kfill,0,NULL,0);
+    r=readdir_fs("/b",mybuf,kfill,0,NULL,0);
     printf("readdir of / done with return value:%d\n",r);
     r=open_fs("/",NULL);
     printf("open of / done with return value:%d\n",r);
@@ -29,7 +29,11 @@ int main(){int r;char mybuf[4096];struct stat st;
 //read root done
     r=getattr_fs("/abc",&st,NULL);
     printf("getattr of /abc done. return value:%d mode:%d nlink:%ld\n",r,st.st_mode,st.st_nlink);
-    printf("inode of path ..:%d\n",pathtoinode("/autorun.inf"));
+    printf("inode of path :%d\n",pathtoinode("/a2.txt"));
+    a=inode_dat(0);printf("%s :%d\n",a,getsize(0));free((void*)a);
+    a=inode_dat(1);printf("%s :%d\n",a,getsize(1));free((void*)a);
+    a=inode_dat(2);printf("%s :%d\n",a,getsize(2));free((void*)a);
+    a=inode_dat(3);printf("%s :%d\n",a,getsize(3));free((void*)a);
     destroy_fs(NULL);
     //free((void*)fs);//fclose(cont);fclose(logger);
     return 0;
