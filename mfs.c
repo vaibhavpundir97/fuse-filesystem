@@ -31,7 +31,10 @@ static struct fuse_operations fop={
     .destroy=destroy_fs,
     .write=write_fs,
     .mkdir=mkdir_fs,
-    //.unlink=unlink_fs,
+    .unlink=unlink_fs,
+    .rmdir=rmdir_fs,
+    .truncate=truncate_fs,
+    .create=create_fs,
 };
 
 //fixing at a constant path and ignoring args
