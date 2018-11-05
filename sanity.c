@@ -56,6 +56,8 @@ int main(){int r;char mybuf[4096],*a;struct stat st;
     a=inode_dat(0);printf("%s :%d,e:%d\n",a,getsize(0),pathtoinode("/e.txt"));free((void*)a);
     r=readdir_fs("/",mybuf,kfill,0,NULL,0);
     write_fs("/e.txt","abcdwer",7,0,NULL);
+    rename_fs("/e.txt","/se.txt",0);
+    //readdir_fs("/",mybuf,kfill,0,NULL,0);
     //destroy_fs(NULL);
     free((void*)fs);free((void*)lbuffer);//fclose(cont);
     fclose(logger);

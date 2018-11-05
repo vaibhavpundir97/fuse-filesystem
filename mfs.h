@@ -358,3 +358,25 @@ static int create_fs(const char *path,mode_t what,struct fuse_file_info *fi){
     //free((void*)a);free((void*)d);
     return 0;
 }
+
+static int rename_fs(const char *path, const char *nwpath, unsigned int flags){
+    int i,j,k,x,p;char *a,*b,*d,*e,odat[200];
+    i=sprintf(loffset,"rename called on op:%s np:%s\n",path,nwpath);loffset+=i;//return -ENOENT;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;a=strdup(path);
+    x=k=0;while(a[x]!='\0'){if(a[x]=='/')k=x;x++;}k++;
+    p= fs->ind[i].parent;
+    d=inode_dat(p);printf("d:%s\n",d);
+    e=malloc(sizeof(char)*(getsize(p)+strlen(nwpath+32)));e[0]='\0';
+    b=strtok(d,",");
+    while(b!=NULL){j=0;printf("b:%s\n",b);
+        while(b[j]!=' ')j++;j++;sscanf(b+j,"%d",&x);
+        if(x==i){sprintf(odat,",%s %d",nwpath+k,i);strcat(e,odat);}
+        else {sprintf(odat,",%s",b);strcat(e,odat);}
+        b=strtok(NULL,",");
+    }
+    deldat(p);
+    inode_write(p,e,strlen(e));printf("e:%s\n",e);
+    free((void*)e);free((void*)a);free((void*)d);
+    return 0;
+}

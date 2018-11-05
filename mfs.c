@@ -35,6 +35,7 @@ static struct fuse_operations fop={
     .rmdir=rmdir_fs,
     .truncate=truncate_fs,
     .create=create_fs,
+    .rename=rename_fs,
 };
 
 //fixing at a constant path and ignoring args
