@@ -56,9 +56,20 @@ struct fs_str{
     struct dnode dnd[14336];
 };
 
+char dbit[2048];
+
 
 //utility functions section -----------------------------------------------------
 
+void syn(){int i,j;char *b;
+    fseek(cont,offsetof(struct fs_str,ibit),SEEK_SET);
+    fwrite((void*)fs->ibit,1,2048,cont);b=dbit;
+    for(i=2;i<2048;i++)if(b[i]!=0){for(j=0;j<8;j++)if(b[i]&&(1<<j)){
+        fseek(cont,offsetof(struct fs_str,ind)+2048*i+256*j,SEEK_SET);
+        fwrite((void*)(fs->ind+8*i+j),1,256,cont);
+        }b[i]=0;}
+    fflush(cont);
+}
 
 int getsize(int indn){
 // function to get size of an inode
@@ -122,16 +133,20 @@ void rmbit(int a,int t){
 }
 
 int getfree(int t){
-    char *b;int i,j;
+    char *b,c;int i,j;
     if(t==0){
         b=fs->dbit;for(i=0;i<1792;i++)if(b[i]!=-1)break;
         if(i==1792)return -1;
-        for(j=0;j<8;j++)if((b[i]&(1<<j))==0)break;b[i]|=(1<<j);return i*8+j;
+        for(j=0;j<8;j++)if((b[i]&(1<<j))==0)break;b[i]|=(1<<j);
+        dbit[256+i]!=(1<<j);
+        return i*8+j;
     }
     if(t==1){
         b=fs->ibit+2;for(i=0;i<254;i++)if(b[i]!=-1)break;
         if(i==254)return -1;
-        for(j=0;j<8;j++)if((b[i]&(1<<j))==0)break;b[i]|=(1<<j);return i*8+j;
+        for(j=0;j<8;j++)if((b[i]&(1<<j))==0)break;b[i]|=(1<<j);
+        dbit[i+2]|=(1<<j);
+        return i*8+j;
     }
 }
 
@@ -202,7 +217,7 @@ static void init_fs(){
     else {              //if file already present then read previous contents
         fread((void*)fs,1,fz,cont);fclose(cont);cont=fopen("cont.txt","wb");
     }
-    getfree(1);getfree(1);
+    //getfree(1);getfree(1);
 }
 
 
@@ -210,7 +225,7 @@ static void init_fs(){
 
 
 static void destroy_fs(void *pd){
-    int fz=4*1024*1024;fwrite((void*)fs,1,fz,cont);fclose(cont);
+    int fz=4*1024*1024;fseek(cont,0,SEEK_SET);fwrite((void*)fs,1,fz,cont);fclose(cont);
     fwrite((void*)lbuffer,1,loffset-lbuffer,logger);
     fclose(logger);
     free((void*)fs);free((void*)lbuffer);
@@ -218,15 +233,16 @@ static void destroy_fs(void *pd){
 
 static int getattr_fs(const char *path,struct stat *st,struct fuse_file_info *fi){
     int i,j,k;
-    struct inode *e;
+    struct inode *e,*f;
     i=sprintf(loffset,"getattr called on %s\n",path);loffset+=i;
     memset((void*)st, 0, sizeof(struct stat));
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
-    e=&fs->ind[i];
-    if(e->type==1){st->st_nlink=2;st->st_mode=S_IFDIR | 0755;}
-    else {st->st_mode=S_IFREG | 0444;st->st_size=getsize(i);st->st_nlink=1;}
-    
+    e=&fs->ind[i];st->st_nlink=e->links;st->st_size=getsize(i);
+    k=0;f=e;while(f->n>64){k+=64;f=&fs->ind[f->filld];}
+    k+=f->n;st->st_blocks=k;
+    if(e->type==1){st->st_mode=S_IFDIR | 0755;}
+    else {st->st_mode=S_IFREG | 0444;}
     return 0;
 }
 
@@ -285,6 +301,9 @@ static int write_fs(const char *path,const char *dat,size_t size,off_t offset,
     for(k=0;k<size;k++)d[k+offset]=dat[k];
     deldat(i);
     inode_write(i,d,j);
+    dbit[i/8+16]|=(1<<(i%8));
+    //{char c;c=dbit[i/8+2];c|=(1<<(i%8));dbit[i/8+2]=c;}
+    syn();
     free((void*)d);
     return size;
 }
@@ -300,7 +319,11 @@ static int mkdir_fs(const char *path, mode_t what){
     d=inode_dat(i);d=realloc(d,sz+strlen(a+k)+32);x=getfree(1);
     e=fs->ind+x;e->type=1;e->n=0;e->filld=0;e->links=2;e->parent=i;y=sprintf(odat,". %d,.. %d",x,i);inode_write(x,odat,y);
     j=sprintf(d+sz,",%s %d",a+k,x);deldat(i);inode_write(i,d,sz+j);
-    free((void*)a);free((void*)d);return 0;
+    free((void*)a);free((void*)d);
+    dbit[i/8+16]|=(1<<(i%8));
+    //{char c;c=dbit[i/8];c|=(1<<(i%8));dbit[i/8]=c;}
+    syn();
+    return 0;
 }
 
 static int unlink_fs(const char *path){
@@ -315,6 +338,9 @@ static int unlink_fs(const char *path){
         while(b[x]!='\0')x++;b[x]=',';b[x+1]='\0';a=strtok(NULL,",");
     }
     deldat(p);inode_write(p,b,x);free((void*)d);free((void*)b);rmbit(i,1);
+    dbit[p/8+16]|=(1<<(p%8));
+    //{char c;c=dbit[p/8];c|=(1<<(p%8));dbit[p/8]=c;}
+    syn();
     return 0;
 }
 
@@ -331,6 +357,9 @@ static int rmdir_fs(const char *path){
         while(b[x]!='\0')x++;b[x]=',';b[x+1]='\0';a=strtok(NULL,",");
     }
     deldat(p);inode_write(p,b,x);free((void*)d);free((void*)b);rmbit(i,1);
+    dbit[p/8+16]|=(1<<(p%8));
+    //{char c;c=dbit[p/8];c|=(1<<(p%8));dbit[p/8]=c;}
+    syn();
     return 0;
 }
 
@@ -340,6 +369,8 @@ static int truncate_fs(const char *path,off_t offset,struct fuse_file_info *fi){
     char *c;
     i=pathtoinode(path);if(i==-1)return -ENOENT;
     c=inode_dat(i);deldat(i);inode_write(i,c,offset);
+    {char c;c=dbit[i/8];c|=(1<<(i%8));dbit[i/8]=c;}
+    syn();
     return 0;
 }
 
@@ -355,7 +386,11 @@ static int create_fs(const char *path,mode_t what,struct fuse_file_info *fi){
     j=sprintf(d+sz,",%s %d",a+k,x);printf("x:%d i:%d d:%s:%d:\n",x,i,d,sz+j);
     deldat(i);
     inode_write(i,d,sz+j);
-    //free((void*)a);free((void*)d);
+    //{char c;c=dbit[x/8];c|=(1<<(x%8));dbit[x/8]=c;}
+    //{char c;c=dbit[i/8];c|=(1<<(i%8));dbit[i/8]=c;}
+    dbit[i/8+16]|=(1<<(i%8));
+    syn();
+    free((void*)a);free((void*)d);
     return 0;
 }
 
@@ -377,6 +412,9 @@ static int rename_fs(const char *path, const char *nwpath, unsigned int flags){
     }
     deldat(p);
     inode_write(p,e,strlen(e));printf("e:%s\n",e);
+    //{char c;c=dbit[p/8];c|=(1<<(p%8));dbit[p/8]=c;}
+    dbit[p/8+16]|=(1<<(p%8));
+    syn();
     free((void*)e);free((void*)a);free((void*)d);
     return 0;
 }

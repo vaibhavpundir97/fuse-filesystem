@@ -18,7 +18,7 @@ int kfill (void *buf, const char *name,
                 }
 
 void rinit(){fs=malloc(sizeof(char)*(1024*1024*4));cont=fopen("cont.txt","rb");
-fread((void*)fs,1,4*1024*1024,cont);fclose(cont);logger=fopen("logger.txt","w");
+fread((void*)fs,1,4*1024*1024,cont);fclose(cont);cont=fopen("cont2.txt","wb");logger=fopen("logger.txt","w");
 lbuffer=malloc(sizeof(char)*(1024*1024));loffset=lbuffer;
 }
 
