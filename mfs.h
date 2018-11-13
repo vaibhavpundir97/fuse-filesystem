@@ -168,7 +168,8 @@ void inode_write(int ino,char *d,int sz){
     }
     j=sz/256;k=sz%256;
     for(i=0;i<j;i++){e->dat[i]=getfree(0);memcpy((void*)fs->dnd[e->dat[i]].d,d+256*i,256);}
-    e->dat[j]=getfree(0);memcpy(fs->dnd[e->dat[j]].d,d+256*j,k);if(e->n==0){e->n=j+1;e->filld=k;}
+    if(k!=0){e->dat[j]=getfree(0);memcpy(fs->dnd[e->dat[j]].d,d+256*j,k);}
+    if(e->n==0){e->n=j+(k!=0);e->filld=(k==0)?256:k;}
 }
 
 // init function -----------------------------------------
@@ -295,6 +296,10 @@ static int write_fs(const char *path,const char *dat,size_t size,off_t offset,
     i=sprintf(loffset,"read called on %s size:%ld offset %ld\n",path,size,offset);loffset+=i;
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
+    deldat(i);
+    dbit[i/8+16]|=(1<<(i%8));size=strlen(dat);
+    inode_write(i,(char*)dat,size);syn();
+    return size;
     j=getsize(i);printf("done\n");
     d=inode_dat(i);
     if((offset+size)>j)d=(char*)realloc((void*)d,sizeof(char)*(j=(offset+size)));
