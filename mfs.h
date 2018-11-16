@@ -61,7 +61,7 @@ char dbit[2048];
 
 //utility functions section -----------------------------------------------------
 
-void syn(){int i,j;char *b;
+void syn(){int i,j;char *b;return;
     fseek(cont,offsetof(struct fs_str,ibit),SEEK_SET);
     fwrite((void*)fs->ibit,1,2048,cont);b=dbit;
     for(i=2;i<2048;i++)if(b[i]!=0){for(j=0;j<8;j++)if(b[i]&&(1<<j)){
@@ -241,7 +241,7 @@ static int getattr_fs(const char *path,struct stat *st,struct fuse_file_info *fi
     if(i==-1)return -ENOENT;
     e=&fs->ind[i];st->st_nlink=e->links;st->st_size=getsize(i);
     k=0;f=e;while(f->n>64){k+=64;f=&fs->ind[f->filld];}
-    k+=f->n;st->st_blocks=k;
+    k+=f->n;st->st_blocks=k;st->st_blksize=256;
     if(e->type==1){st->st_mode=S_IFDIR | 0755;}
     else {st->st_mode=S_IFREG | 0444;}
     return 0;
@@ -282,7 +282,7 @@ static int read_fs(const char *path, char *buf, size_t size, off_t offset,
     i=pathtoinode(path);
     if(i==-1)return -ENOENT;
     s=getsize(i);
-    if(offset>=s)return 0;
+    if(offset>=s)return 0;s=s-offset;
     d=inode_dat(i);
     if(size>s)size=s;
     memcpy(buf,d+offset,size);
@@ -341,7 +341,7 @@ static int unlink_fs(const char *path){
     while(a!=NULL){j=0;
         while(a[j++]!=' ');sscanf(a+j,"%d",&k);if(k==i){a=strtok(NULL,",");continue;}strcat(b,a);while(a[j]!='\0')j++;
         while(b[x]!='\0')x++;b[x]=',';b[x+1]='\0';a=strtok(NULL,",");
-    }
+    }deldat(i);
     deldat(p);inode_write(p,b,x);free((void*)d);free((void*)b);rmbit(i,1);
     dbit[p/8+16]|=(1<<(p%8));
     //{char c;c=dbit[p/8];c|=(1<<(p%8));dbit[p/8]=c;}
@@ -353,7 +353,8 @@ static int rmdir_fs(const char *path){
     int i,j,k,p,x;char *a,*b,*d;
     i=sprintf(loffset,"rmdir called on %s\n",path);loffset+=i;
     i=pathtoinode(path);if(i==-1||i==0)return -ENOENT;
-    if(getsize(i)!=8)return -ENOENT;
+    j=0;d=inode_dat(i);k=0;while(d[j]!='\0')if(d[j++]==' ')k++;
+    free((void*)d);if(k>2)return -ENOTEMPTY;
     p=fs->ind[i].parent;
     d=inode_dat(p);a=strtok(d,",");
     b=malloc(sizeof(char)*(getsize(p)+1));b[0]='\0';x=0;
@@ -399,6 +400,12 @@ static int create_fs(const char *path,mode_t what,struct fuse_file_info *fi){
     return 0;
 }
 
+int ncmp(const char *a,char *b){
+	int i;
+	for(i=0;a[i]!='\0'&&b[i]!=' ';i++)if(a[i]!=b[i])return 1;
+	return !(a[i]=='\0'&&b[i]==' ');
+}
+
 static int rename_fs(const char *path, const char *nwpath, unsigned int flags){
     int i,j,k,x,p;char *a,*b,*d,*e,odat[200];
     i=sprintf(loffset,"rename called on op:%s np:%s\n",path,nwpath);loffset+=i;//return -ENOENT;
@@ -412,7 +419,7 @@ static int rename_fs(const char *path, const char *nwpath, unsigned int flags){
     while(b!=NULL){j=0;printf("b:%s\n",b);
         while(b[j]!=' ')j++;j++;sscanf(b+j,"%d",&x);
         if(x==i){sprintf(odat,",%s %d",nwpath+k,i);strcat(e,odat);}
-        else {sprintf(odat,",%s",b);strcat(e,odat);}
+        else if(ncmp(nwpath+k,b)){sprintf(odat,",%s",b);strcat(e,odat);}
         b=strtok(NULL,",");
     }
     deldat(p);
