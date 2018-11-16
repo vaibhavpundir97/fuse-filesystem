@@ -313,6 +313,19 @@ static int write_fs(const char *path,const char *dat,size_t size,off_t offset,
     return size;
 }
 
+static int write2_fs(const char *path,const char *dat,size_t size,off_t offset,struct fuse_file_info *fi){
+    int i,j,k,s;struct inode *e;char *d;
+    i=pathtoinode(path);
+    if(i==-1)return -ENOENT;
+    e=fs->ind+i;
+    s=getsize(i);
+    d=inode_dat(i);deldat(i);
+    if((size+offset)>s){d=realloc((void*)d,sizeof(char)*(size+offset));s=size+offset;}
+    for(j=0;j<size;j++)d[j+offset]=dat[j];
+    inode_write(i,d,(size+offset)<s?(size+offset):s);
+    return s;
+}
+
 static int mkdir_fs(const char *path, mode_t what){
     int i,j,k,x,sz,y;struct inode *e;char *a,*d,odat[200];
     i=sprintf(loffset,"mkdir called on %s\n",path);loffset+=i;
