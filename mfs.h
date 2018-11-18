@@ -33,15 +33,19 @@ struct spblk{
 };
 struct inode{
     short int dat[64];
-    short int n;short int filld;
+    short int n;
+    short int filld;
     int links;
     int uid;
     int gid;
     int perm;
     int type;
+    int dev_id;
+    struct timespec atime;
+    struct timespec ctime;
+    struct timespec mtime;
     short int parent;
-    //we will fill other fields later
-    char none[102];
+    char none[42];
 };
 
 struct dnode{
@@ -69,6 +73,10 @@ void syn(){int i,j;char *b;return;
         fwrite((void*)(fs->ind+8*i+j),1,256,cont);
         }b[i]=0;}
     fflush(cont);
+}
+
+void totsyn(){fseek(cont,0,SEEK_SET);
+    fwrite((void*)fs,1,4*1024*1024,cont);fflush(cont);fsync(fileno(cont));
 }
 
 int getsize(int indn){
@@ -213,7 +221,7 @@ static void init_fs(){
         id->uid=id->gid=0;id->perm=-1; //dont know what to fill
         dn=&fs->dnd[0];
         strcpy(dn->d,". 0,.. 0");
-        addextra();
+        //addextra();
     }
     else {              //if file already present then read previous contents
         fread((void*)fs,1,fz,cont);fclose(cont);cont=fopen("cont.txt","wb");
@@ -243,7 +251,7 @@ static int getattr_fs(const char *path,struct stat *st,struct fuse_file_info *fi
     k=0;f=e;while(f->n>64){k+=64;f=&fs->ind[f->filld];}
     k+=f->n;st->st_blocks=k;st->st_blksize=256;
     if(e->type==1){st->st_mode=S_IFDIR | 0755;}
-    else {st->st_mode=S_IFREG | 0444;}
+    else {st->st_mode=S_IFREG | 0644;}
     return 0;
 }
 
@@ -309,7 +317,7 @@ static int write_fs(const char *path,const char *dat,size_t size,off_t offset,
     dbit[i/8+16]|=(1<<(i%8));
     //{char c;c=dbit[i/8+2];c|=(1<<(i%8));dbit[i/8+2]=c;}
     syn();
-    free((void*)d);
+    free((void*)d);totsyn();
     return size;
 }
 
@@ -322,7 +330,7 @@ static int write2_fs(const char *path,const char *dat,size_t size,off_t offset,s
     d=inode_dat(i);deldat(i);
     if((size+offset)>s){d=realloc((void*)d,sizeof(char)*(size+offset));s=size+offset;}
     for(j=0;j<size;j++)d[j+offset]=dat[j];
-    inode_write(i,d,(size+offset)<s?(size+offset):s);
+    inode_write(i,d,(size+offset)<s?(size+offset):s);totsyn();
     return s;
 }
 
@@ -340,7 +348,7 @@ static int mkdir_fs(const char *path, mode_t what){
     free((void*)a);free((void*)d);
     dbit[i/8+16]|=(1<<(i%8));
     //{char c;c=dbit[i/8];c|=(1<<(i%8));dbit[i/8]=c;}
-    syn();
+    syn();totsyn();
     return 0;
 }
 
@@ -358,7 +366,7 @@ static int unlink_fs(const char *path){
     deldat(p);inode_write(p,b,x);free((void*)d);free((void*)b);rmbit(i,1);
     dbit[p/8+16]|=(1<<(p%8));
     //{char c;c=dbit[p/8];c|=(1<<(p%8));dbit[p/8]=c;}
-    syn();
+    syn();totsyn();
     return 0;
 }
 
@@ -378,7 +386,7 @@ static int rmdir_fs(const char *path){
     deldat(p);inode_write(p,b,x);free((void*)d);free((void*)b);rmbit(i,1);
     dbit[p/8+16]|=(1<<(p%8));
     //{char c;c=dbit[p/8];c|=(1<<(p%8));dbit[p/8]=c;}
-    syn();
+    syn();totsyn();
     return 0;
 }
 
@@ -389,7 +397,7 @@ static int truncate_fs(const char *path,off_t offset,struct fuse_file_info *fi){
     i=pathtoinode(path);if(i==-1)return -ENOENT;
     c=inode_dat(i);deldat(i);inode_write(i,c,offset);
     {char c;c=dbit[i/8];c|=(1<<(i%8));dbit[i/8]=c;}
-    syn();
+    syn();totsyn();
     return 0;
 }
 
@@ -409,7 +417,7 @@ static int create_fs(const char *path,mode_t what,struct fuse_file_info *fi){
     //{char c;c=dbit[i/8];c|=(1<<(i%8));dbit[i/8]=c;}
     dbit[i/8+16]|=(1<<(i%8));
     syn();
-    free((void*)a);free((void*)d);
+    free((void*)a);free((void*)d);totsyn();
     return 0;
 }
 
@@ -440,6 +448,11 @@ static int rename_fs(const char *path, const char *nwpath, unsigned int flags){
     //{char c;c=dbit[p/8];c|=(1<<(p%8));dbit[p/8]=c;}
     dbit[p/8+16]|=(1<<(p%8));
     syn();
-    free((void*)e);free((void*)a);free((void*)d);
+    free((void*)e);free((void*)a);free((void*)d);totsyn();
     return 0;
+}
+
+static int utimens_fs (const char *path, const struct timespec tv[2],
+			 struct fuse_file_info *fi){
+		return 0;			 
 }
